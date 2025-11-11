@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { toast } from "react-hot-toast";
 
 export default function CreateContainerModal({ onClose, onCreated }) {
-
     const token = localStorage.getItem("token");
 
     const [image, setImage] = useState("");
@@ -20,13 +19,16 @@ export default function CreateContainerModal({ onClose, onCreated }) {
         try {
             const res = await fetch(`${API_URL}/containers/run`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     image,
                     name,
-                    ports: {
+                    ports: hostPort && containerPort ? {
                         [`${containerPort}/tcp`]: [{ HostPort: hostPort }],
-                    },
+                    } : {},
                 }),
             });
 
@@ -34,8 +36,12 @@ export default function CreateContainerModal({ onClose, onCreated }) {
 
             if (res.ok) {
                 toast.success(`Container ${name || image} created! 🎉`);
-                onCreated();
-                onClose();
+                // Tutup modal dulu
+                onClose?.();
+                // Reload container list setelah 300ms
+                setTimeout(() => {
+                    onCreated?.();
+                }, 300);
             } else {
                 toast.error(result.message || "Failed to create container");
             }
@@ -49,10 +55,14 @@ export default function CreateContainerModal({ onClose, onCreated }) {
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative">
-                <h2 className="text-xl font-bold mb-4 text-gray-800">Create New Container</h2>
+                <h2 className="text-xl font-bold mb-4 text-gray-800">
+                    Create New Container
+                </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Image Name</label>
+                        <label className="block text-sm font-medium mb-1">
+                            Image Name
+                        </label>
                         <input
                             type="text"
                             value={image}
@@ -64,7 +74,9 @@ export default function CreateContainerModal({ onClose, onCreated }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium mb-1">Container Name (optional)</label>
+                        <label className="block text-sm font-medium mb-1">
+                            Container Name (optional)
+                        </label>
                         <input
                             type="text"
                             value={name}

@@ -12,57 +12,59 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
 
 export default function ContainerCard({ container, onAction, processingId }) {
-    const shortId = container.container_id?.substring(0, 12) || "Unknown";
+    const token = localStorage.getItem("token");
+    const API_URL = import.meta.env.VITE_API_URL;
+
+    const id = container.container_id;
+    const shortId = id?.substring(0, 12) || "Unknown";
     const name = container.name?.replace("/", "") || "Unnamed";
     const status = container.status;
     const isRunning = status === "running";
-    const isProcessing = processingId === container.container_id;
+    const isProcessing = processingId === id;
 
     const [stats, setStats] = useState(null);
-    const id = container.container_id;
     const [cpuHistory, setCpuHistory] = useState([]);
     const [memHistory, setMemHistory] = useState([]);
 
+    // Auto-fetch stats setiap 3 detik kalau container running
     useEffect(() => {
         let interval;
 
-        if (container.status === "running") {
+        if (isRunning) {
             const fetchStats = () => {
-                fetch(`http://localhost:3000/api/containers/stats/${id}`)
+                fetch(`${API_URL}/containers/stats/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
                     .then((res) => res.json())
                     .then((data) => {
-                        if (data && data.success && data.stats) {
-                            setStats(data.stats);
-                            const s = data.success ? data.stats : data;
-                            if (s) {
-                                setCpuHistory((prev) => [...prev.slice(-19), s.cpuPercent]);
-                                setMemHistory((prev) => [...prev.slice(-19), s.memoryPercent]);
-                            }
-                        } else if (data.cpuPercent) {
-                            setStats(data);
+                        const s = data.success ? data.stats : data;
+                        if (s) {
+                            setStats(s);
+                            setCpuHistory((prev) => [...prev.slice(-19), s.cpuPercent]);
+                            setMemHistory((prev) => [...prev.slice(-19), s.memoryPercent]);
                         }
                     })
                     .catch((err) => console.error("Failed to fetch stats", err));
             };
 
-            fetchStats(); // initial fetch
-            interval = setInterval(fetchStats, 3000); // refresh tiap 3 detik
+            fetchStats();
+            interval = setInterval(fetchStats, 3000);
         }
 
         return () => clearInterval(interval);
-    }, [container.status, id]);
+    }, [isRunning, id]);
 
-
-    // Handler klik tombol
+    // Kirim event ke dashboard
     const triggerAction = (action, method, endpoint) => {
         onAction({
-            id: container.container_id,
+            id,
             action,
             method,
-            endpoint
+            endpoint,
         });
     };
 
+    // Chart setup
     const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -91,7 +93,6 @@ export default function ContainerCard({ container, onAction, processingId }) {
         ],
     });
 
-    // console.log({ stats });
     return (
         <div className="bg-white p-4 rounded-2xl shadow-md hover:shadow-lg transition border border-gray-200">
             <div className="flex justify-between items-center mb-2">
@@ -107,34 +108,36 @@ export default function ContainerCard({ container, onAction, processingId }) {
             <p className="text-sm text-gray-500 mb-2">ID: {shortId}</p>
 
             {stats && (
-                <div className="text-sm text-gray-600 mb-3">
-                    <p>💻 <b>CPU:</b> {stats.cpuPercent}%</p>
+                <div className="text-sm text-gray-600 mb-3 space-y-1">
+                    <p>💻 CPU: <b>{stats.cpuPercent}%</b></p>
                     <div className="h-12">
                         <Line data={chartData(cpuHistory, "#3b82f6")} options={chartOptions} />
                     </div>
-                    <p>🧠 <b>RAM:</b> {stats.memoryUsage}MB / {stats.memoryLimit}MB ({stats.memoryPercent}%)</p>
+                    <p>🧠 RAM: <b>{stats.memoryPercent}%</b></p>
                     <div className="h-12">
                         <Line data={chartData(memHistory, "#10b981")} options={chartOptions} />
                     </div>
                 </div>
             )}
 
-
-
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mt-3">
                 {isRunning ? (
                     <>
                         <ActionButton
                             label="Stop"
                             color="yellow"
-                            onClick={() => triggerAction("stop", "POST", `/containers/stop/${container.container_id}`)}
+                            onClick={() =>
+                                triggerAction("stop", "POST", `/containers/stop/${id}`)
+                            }
                             disabled={isProcessing}
                             loading={isProcessing}
                         />
                         <ActionButton
                             label="Restart"
                             color="blue"
-                            onClick={() => triggerAction("restart", "POST", `/containers/restart/${container.container_id}`)}
+                            onClick={() =>
+                                triggerAction("restart", "POST", `/containers/restart/${id}`)
+                            }
                             disabled={isProcessing}
                             loading={isProcessing}
                         />
@@ -143,26 +146,41 @@ export default function ContainerCard({ container, onAction, processingId }) {
                     <ActionButton
                         label="Start"
                         color="green"
-                        onClick={() => triggerAction("start", "POST", `/containers/start/${container.container_id}`)}
+                        onClick={() =>
+                            triggerAction("start", "POST", `/containers/start/${id}`)
+                        }
                         disabled={isProcessing}
                         loading={isProcessing}
                     />
                 )}
+
                 <ActionButton
-                    label="Remove"
-                    color="red"
+                    label="Logs"
+                    color="green"
                     onClick={() =>
-                        confirm(`Remove container ${name}?`) &&
-                        triggerAction("remove", "DELETE", `/containers/remove/${container.container_id}`)
+                        triggerAction("logs", "GET", `/containers/${id}/logs`)
                     }
                     disabled={isProcessing}
                     loading={isProcessing}
                 />
 
                 <ActionButton
-                    label="Logs"
-                    color="gray"
-                    onClick={() => triggerAction("logs", "GET", `/containers/${container.container_id}/logs`)}
+                    label="Inspect"
+                    color="purple"
+                    onClick={() =>
+                        triggerAction("inspect", "GET", `/containers/inspect/${id}`)
+                    }
+                    disabled={isProcessing}
+                    loading={isProcessing}
+                />
+
+                <ActionButton
+                    label="Remove"
+                    color="red"
+                    onClick={() =>
+                        confirm(`Remove container ${name}?`) &&
+                        triggerAction("remove", "DELETE", `/containers/remove/${id}`)
+                    }
                     disabled={isProcessing}
                     loading={isProcessing}
                 />
@@ -171,6 +189,7 @@ export default function ContainerCard({ container, onAction, processingId }) {
     );
 }
 
+// 🔘 ActionButton Component
 function ActionButton({ label, color, onClick, disabled, loading }) {
     const base =
         "px-3 py-1 text-xs text-white rounded transition flex items-center justify-center gap-1";
@@ -179,13 +198,15 @@ function ActionButton({ label, color, onClick, disabled, loading }) {
         blue: "bg-blue-500 hover:bg-blue-600",
         green: "bg-green-500 hover:bg-green-600",
         red: "bg-red-500 hover:bg-red-600",
+        purple: "bg-purple-500 hover:bg-purple-600",
     };
 
     return (
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`${base} ${colors[color]} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+            className={`${base} ${colors[color]} ${disabled ? "opacity-60 cursor-not-allowed" : ""
+                }`}
         >
             {loading ? (
                 <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>

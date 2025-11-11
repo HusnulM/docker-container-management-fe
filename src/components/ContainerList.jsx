@@ -12,6 +12,8 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
 
 export default function ContainerCard({ container, onAction, processingId }) {
+    const token = localStorage.getItem("token");
+
     const shortId = container.container_id?.substring(0, 12) || "Unknown";
     const name = container.name?.replace("/", "") || "Unnamed";
     const status = container.status;
@@ -30,7 +32,9 @@ export default function ContainerCard({ container, onAction, processingId }) {
 
         if (container.status === "running") {
             const fetchStats = () => {
-                fetch(`${API_URL}/containers/stats/${id}`)
+                fetch(`${API_URL}/containers/stats/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
                     .then((res) => res.json())
                     .then((data) => {
                         const s = data.success ? data.stats : data;
