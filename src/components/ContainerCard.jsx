@@ -15,6 +15,10 @@ export default function ContainerCard({ container, onAction, processingId }) {
     const token = localStorage.getItem("token");
     const API_URL = import.meta.env.VITE_API_URL;
 
+    const [filtered, setFiltered] = useState(container);
+    const [filters, setFilters] = useState({});
+
+
     const id = container.container_id;
     const shortId = id?.substring(0, 12) || "Unknown";
     const name = container.name?.replace("/", "") || "Unnamed";
